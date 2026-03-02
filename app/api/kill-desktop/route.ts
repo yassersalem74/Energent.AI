@@ -1,4 +1,4 @@
-import { killDesktop } from "@/lib/e2b/utils";
+import { killDesktop } from "@/lib/sandbox/utils";
 
 // Common handler for both GET and POST requests
 async function handleKillDesktop(request: Request) {
