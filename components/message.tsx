@@ -23,7 +23,6 @@ import {
   StopCircle,
 } from "lucide-react";
 
-/* ✅ الحل الصح: component منفصل للهاندل */
 function ToolEventHandler({
   toolInvocation,
 }: {
@@ -187,7 +186,6 @@ const PurePreviewMessage = ({
 
                     return (
                       <>
-                        {/* ✅ هنا الربط الصح */}
                         <ToolEventHandler
                           toolInvocation={part.toolInvocation}
                         />

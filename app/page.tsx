@@ -15,6 +15,7 @@ import {
 import { getDesktopURL } from "@/lib/sandbox/utils";
 import { useScrollToBottom } from "@/lib/use-scroll-to-bottom";
 import { ABORTED, cn } from "@/lib/utils";
+import { Message } from "ai";
 import { useChat } from "@ai-sdk/react";
 import {
   LayoutPanelTop,
@@ -30,6 +31,66 @@ import { useChatStore } from "@/store/chatStore";
 import { useEventStore } from "@/store/eventStore";
 
 const FALLBACK_PREFIX = "Sandbox tools are running in fallback mode.";
+const ANTHROPIC_BILLING_PATTERNS = [
+  /credit balance is too low/i,
+  /plans\s*&\s*billing/i,
+  /purchase credits/i,
+  /anthropic api/i,
+];
+
+const isAnthropicBillingError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error);
+  return ANTHROPIC_BILLING_PATTERNS.some((pattern) => pattern.test(message));
+};
+
+const createBillingFallbackMessage = (): Message => {
+  const toolCallId = crypto.randomUUID();
+
+  return {
+    id: `demo-${crypto.randomUUID()}`,
+    role: "assistant",
+    createdAt: new Date(),
+    content:
+      "Anthropic credits are unavailable right now, so the dashboard is showing a local demo run instead.",
+    parts: [
+      {
+        type: "text",
+        text:
+          "Anthropic credits are unavailable right now, so the dashboard is showing a local demo run instead.",
+      },
+      {
+        type: "tool-invocation",
+        toolInvocation: {
+          state: "call",
+          step: 0,
+          toolCallId,
+          toolName: "computer",
+          args: {
+            action: "type",
+            text: "youtube.com",
+          },
+        },
+      },
+      {
+        type: "tool-invocation",
+        toolInvocation: {
+          state: "result",
+          step: 0,
+          toolCallId,
+          toolName: "computer",
+          args: {
+            action: "type",
+            text: "youtube.com",
+          },
+          result: {
+            type: "text",
+            text: "Navigation completed in demo mode.",
+          },
+        },
+      },
+    ],
+  };
+};
 
 function SessionsNav({
   sessions,
@@ -142,18 +203,30 @@ function DesktopPanel({
   streamUrl,
   desktopError,
   onRefresh,
+  compact = false,
 }: {
   isInitializing: boolean;
   streamUrl: string | null;
   desktopError: string | null;
   onRefresh: () => void;
+  compact?: boolean;
 }) {
   return (
-    <div className="relative h-full overflow-hidden bg-[radial-gradient(circle_at_top,#1f2937_0%,#0f172a_38%,#020617_100%)]">
+    <div
+      className={cn(
+        "relative overflow-hidden bg-[radial-gradient(circle_at_top,#1f2937_0%,#0f172a_38%,#020617_100%)]",
+        compact ? "rounded-[28px]" : "h-full",
+      )}
+    >
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(251,191,36,0.12),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(14,165,233,0.1),transparent_30%)]" />
 
-      <div className="relative flex h-full flex-col">
-        <div className="flex items-center justify-between border-b border-white/10 px-5 py-4 text-white">
+      <div className={cn("relative flex flex-col", compact ? "" : "h-full")}>
+        <div
+          className={cn(
+            "flex items-center justify-between border-b border-white/10 text-white",
+            compact ? "px-4 py-3" : "px-5 py-4",
+          )}
+        >
           <div>
             <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-white/55">
               <Monitor className="h-3.5 w-3.5" />
@@ -166,16 +239,24 @@ function DesktopPanel({
 
           <Button
             onClick={onRefresh}
-            className="rounded-full border border-white/10 bg-white/10 text-white backdrop-blur hover:bg-white/15"
+            className={cn(
+              "rounded-full border border-white/10 bg-white/10 text-white backdrop-blur hover:bg-white/15",
+              compact ? "h-9 px-3 text-xs" : "",
+            )}
             disabled={isInitializing}
           >
             {isInitializing ? "Creating..." : "New desktop"}
           </Button>
         </div>
 
-        <div className="relative flex-1 p-4">
+        <div className={cn("relative", compact ? "p-3" : "flex-1 p-4")}>
           {streamUrl ? (
-            <div className="h-full overflow-hidden rounded-[28px] border border-white/10 bg-black/40 p-2 shadow-[0_30px_60px_-36px_rgba(0,0,0,0.85)] backdrop-blur">
+            <div
+              className={cn(
+                "overflow-hidden rounded-[28px] border border-white/10 bg-black/40 p-2 shadow-[0_30px_60px_-36px_rgba(0,0,0,0.85)] backdrop-blur",
+                compact ? "aspect-[16/10] w-full" : "h-full",
+              )}
+            >
               <div className="flex h-full flex-col overflow-hidden rounded-[22px] border border-white/10 bg-black">
                 <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3">
                   <span className="h-2.5 w-2.5 rounded-full bg-rose-400" />
@@ -193,17 +274,44 @@ function DesktopPanel({
               </div>
             </div>
           ) : (
-            <div className="flex h-full items-center justify-center">
-              <div className="max-w-lg rounded-[32px] border border-white/10 bg-white/6 px-8 py-10 text-center text-white shadow-[0_30px_60px_-36px_rgba(0,0,0,0.8)] backdrop-blur">
-                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-300/12 text-amber-200">
+            <div
+              className={cn(
+                "flex items-center justify-center",
+                compact ? "py-3" : "h-full",
+              )}
+            >
+              <div
+                className={cn(
+                  "rounded-[32px] border border-white/10 bg-white/6 text-center text-white shadow-[0_30px_60px_-36px_rgba(0,0,0,0.8)] backdrop-blur",
+                  compact
+                    ? "max-w-md px-5 py-6"
+                    : "max-w-lg px-8 py-10",
+                )}
+              >
+                <div
+                  className={cn(
+                    "mx-auto flex items-center justify-center rounded-2xl bg-amber-300/12 text-amber-200",
+                    compact ? "h-14 w-14" : "h-16 w-16",
+                  )}
+                >
                   <Monitor className="h-8 w-8" />
                 </div>
-                <div className="mt-5 text-2xl font-semibold">
+                <div
+                  className={cn(
+                    "font-semibold",
+                    compact ? "mt-4 text-xl" : "mt-5 text-2xl",
+                  )}
+                >
                   {isInitializing
                     ? "Initializing desktop..."
                     : "Desktop unavailable"}
                 </div>
-                <p className="mt-3 text-sm leading-7 text-white/70">
+                <p
+                  className={cn(
+                    "text-white/70",
+                    compact ? "mt-2 text-sm leading-6" : "mt-3 text-sm leading-7",
+                  )}
+                >
                   {desktopError ??
                     "The remote desktop is not connected yet. Once available, it will appear here with a live browser preview."}
                 </p>
@@ -334,6 +442,26 @@ export default function Chat() {
     maxSteps: 30,
     onError: (error) => {
       console.error(error);
+
+      if (isAnthropicBillingError(error)) {
+        setMessages((prev) => {
+          const lastMessage = prev.at(-1);
+
+          if (lastMessage?.id.startsWith("demo-")) {
+            return prev;
+          }
+
+          return [...prev, createBillingFallbackMessage()];
+        });
+
+        toast.warning("Anthropic credits unavailable", {
+          description: "Showing a local demo tool run so the dashboard stays usable.",
+          richColors: true,
+          position: "top-center",
+        });
+        return;
+      }
+
       toast.error("There was an error", {
         description: "Please try again later.",
         richColors: true,
@@ -537,11 +665,7 @@ export default function Chat() {
   }, [sandboxId]);
 
   return (
-    <div className="relative flex h-dvh bg-[linear-gradient(180deg,#fffaf2_0%,#fff6ea_45%,#fff9f4_100%)]">
-      <div className="fixed left-1/2 top-5 z-50 h-8 w-fit -translate-x-1/2 rounded-lg bg-blue-600 px-3 py-2 text-left text-xs text-white shadow-md xl:hidden">
-        <span>Headless mode</span>
-      </div>
-
+    <div className="relative flex min-h-dvh bg-[linear-gradient(180deg,#fffaf2_0%,#fff6ea_45%,#fff9f4_100%)] xl:h-dvh">
       <div className="hidden w-full xl:block">
         <ResizablePanelGroup direction="horizontal" className="h-full">
           <ResizablePanel
@@ -595,7 +719,7 @@ export default function Chat() {
         </ResizablePanelGroup>
       </div>
 
-      <div className="flex w-full flex-col xl:hidden">
+      <div className="flex min-h-dvh w-full flex-col overflow-y-auto xl:hidden">
         <div className="border-b border-zinc-200/80 bg-white/80 px-4 py-4 backdrop-blur">
           <div className="flex items-center justify-between">
             <AISDKLogo />
@@ -632,6 +756,16 @@ export default function Chat() {
             }
           />
         )}
+
+        <div className="border-t border-zinc-200/80 bg-[linear-gradient(180deg,#fffdf8_0%,#fff4df_100%)] px-4 py-4">
+          <DesktopPanel
+            isInitializing={isInitializing}
+            streamUrl={streamUrl}
+            desktopError={desktopError}
+            onRefresh={refreshDesktop}
+            compact
+          />
+        </div>
 
         <div className="h-[320px] shrink-0 border-t border-zinc-200/80">
           <DebugPanel />
