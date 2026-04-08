@@ -34,6 +34,35 @@ function ToolEventHandler({
 
   const { toolName, toolCallId, state, args } = toolInvocation;
 
+  const getEventType = () => {
+    if (toolName === "bash") {
+      return "bash" as const;
+    }
+
+    if (toolName !== "computer") {
+      return "unknown" as const;
+    }
+
+    switch (args?.action) {
+      case "left_click":
+      case "double_click":
+      case "right_click":
+      case "mouse_move":
+      case "left_click_drag":
+        return "click" as const;
+      case "type":
+        return "type" as const;
+      case "screenshot":
+        return "screenshot" as const;
+      case "scroll":
+        return "scroll" as const;
+      case "key":
+        return "keyboard" as const;
+      default:
+        return "unknown" as const;
+    }
+  };
+
   useEffect(() => {
     if (!toolCallId) return;
 
@@ -44,7 +73,7 @@ function ToolEventHandler({
     if (state === "call" && !exists) {
       addEvent({
         id: toolCallId,
-        type: toolName === "bash" ? "bash" : "unknown",
+        type: getEventType(),
         timestamp: Date.now(),
         status: "pending",
         payload: args,
@@ -52,12 +81,16 @@ function ToolEventHandler({
     }
 
     if (state === "result") {
+      const currentEvent = useEventStore
+        .getState()
+        .events.find((event) => event.id === toolCallId);
+
       updateEvent(toolCallId, {
         status: "success",
-        duration: Date.now(),
+        duration: currentEvent ? Date.now() - currentEvent.timestamp : undefined,
       });
     }
-  }, [toolCallId, state]);
+  }, [addEvent, args, state, toolCallId, toolName, updateEvent]);
 
   return null;
 }

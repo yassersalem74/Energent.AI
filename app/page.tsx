@@ -11,12 +11,15 @@ import { toast } from "sonner";
 import { DeployButton, ProjectInfo } from "@/components/project-info";
 import { AISDKLogo } from "@/components/icons";
 import { PromptSuggestions } from "@/components/prompt-suggestions";
+import { useEventStore } from "@/store/eventStore";
 import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { ABORTED } from "@/lib/utils";
+
+const FALLBACK_PREFIX = "Sandbox tools are running in fallback mode.";
 
 export default function Chat() {
   // Create separate refs for mobile and desktop to ensure both scroll properly
@@ -27,6 +30,7 @@ export default function Chat() {
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [sandboxId, setSandboxId] = useState<string | null>(null);
   const [desktopError, setDesktopError] = useState<string | null>(null);
+  const addEvent = useEventStore((s) => s.addEvent);
 
   const {
     messages,
@@ -146,6 +150,35 @@ export default function Chat() {
       };
     }
   }, [sandboxId]);
+
+  useEffect(() => {
+    const lastMessage = messages.at(-1);
+
+    if (lastMessage?.role !== "assistant") {
+      return;
+    }
+
+    const fallbackText = lastMessage.parts
+      ?.filter((part) => part.type === "text")
+      .map((part) => part.text)
+      .join(" ")
+      .trim();
+
+    if (!fallbackText?.startsWith(FALLBACK_PREFIX)) {
+      return;
+    }
+
+    addEvent({
+      id: `fallback-${lastMessage.id}`,
+      type: "unknown",
+      timestamp: Date.now(),
+      status: "success",
+      payload: {
+        mode: "fallback",
+        text: fallbackText,
+      },
+    });
+  }, [addEvent, messages]);
 
   useEffect(() => {
     // Initialize desktop and get stream URL when the component mounts
