@@ -3,6 +3,7 @@ import { create } from "zustand";
 export type EventStatus = "pending" | "success" | "error";
 
 export type EventType =
+  | "computer"
   | "click"
   | "type"
   | "navigate"

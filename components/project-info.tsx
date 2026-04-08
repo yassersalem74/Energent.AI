@@ -6,14 +6,15 @@ import Link from "next/link";
 export const ProjectInfo = () => {
   return (
     <motion.div className="w-full px-4">
-      <div className="rounded-lg border-border border p-6 flex flex-col gap-4 text-center text-base dark:text-zinc-400">
+      <div className="overflow-hidden rounded-[28px] border border-black/10 bg-[linear-gradient(135deg,#fffaf0_0%,#fff1d6_100%)] p-[1px] shadow-[0_24px_44px_-34px_rgba(0,0,0,0.45)]">
+        <div className="flex flex-col gap-5 rounded-[27px] bg-white/92 p-8 text-center text-base text-zinc-600 backdrop-blur">
         <p className="flex flex-row justify-center gap-4 items-center text-zinc-900 dark:text-zinc-50">
           <VercelIcon size={16} />
           <span>+</span>
           <ComputerIcon />
         </p>
-        <h3 className="text-center text-2xl font-bold">Computer Use Agent</h3>
-        <p>
+        <h3 className="text-center text-3xl font-bold tracking-tight text-zinc-950">Computer Use Agent</h3>
+        <p className="mx-auto max-w-2xl leading-7">
           This demo showcases a Computer Use Agent built with the{" "}
           <StyledLink href="https://sdk.vercel.ai">AI SDK</StyledLink>,{" "}
           <StyledLink href="https://www.anthropic.com/claude/sonnet">
@@ -25,7 +26,7 @@ export const ProjectInfo = () => {
           </StyledLink>
           .
         </p>
-        <p>
+        <p className="mx-auto max-w-xl leading-7">
           {" "}
           Learn more about{" "}
           <Link
@@ -37,6 +38,7 @@ export const ProjectInfo = () => {
           </Link>
           with the AI SDK.
         </p>
+        </div>
       </div>
     </motion.div>
   );

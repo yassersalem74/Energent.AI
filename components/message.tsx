@@ -73,7 +73,7 @@ function ToolEventHandler({
     if (state === "call" && !exists) {
       addEvent({
         id: toolCallId,
-        type: getEventType(),
+        type: toolName,
         timestamp: Date.now(),
         status: "pending",
         payload: args,
@@ -108,7 +108,7 @@ const PurePreviewMessage = ({
   return (
     <AnimatePresence key={message.id}>
       <motion.div
-        className="w-full mx-auto px-4 group/message"
+        className="group/message mx-auto w-full px-4"
         initial={{ y: 5, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         key={`message-${message.id}`}
@@ -116,11 +116,11 @@ const PurePreviewMessage = ({
       >
         <div
           className={cn(
-            "flex gap-4 w-full group-data-[role=user]/message:ml-auto group-data-[role=user]/message:max-w-2xl",
+            "flex w-full gap-4 group-data-[role=user]/message:ml-auto group-data-[role=user]/message:max-w-2xl",
             "group-data-[role=user]/message:w-fit"
           )}
         >
-          <div className="flex flex-col w-full">
+          <div className="flex w-full flex-col">
             {message.parts?.map((part, i) => {
               switch (part.type) {
                 case "text":
@@ -129,13 +129,15 @@ const PurePreviewMessage = ({
                       initial={{ y: 5, opacity: 0 }}
                       animate={{ y: 0, opacity: 1 }}
                       key={`message-${message.id}-part-${i}`}
-                      className="flex flex-row gap-2 items-start w-full pb-4"
+                      className="flex w-full flex-row items-start gap-2 pb-4"
                     >
                       <div
-                        className={cn("flex flex-col gap-4", {
-                          "bg-secondary text-secondary-foreground px-3 py-2 rounded-xl":
-                            message.role === "user",
-                        })}
+                        className={cn(
+                          "flex flex-col gap-4 rounded-[24px] border px-4 py-3 shadow-[0_14px_28px_-24px_rgba(0,0,0,0.35)]",
+                          message.role === "user"
+                            ? "border-zinc-900 bg-zinc-950 text-white"
+                            : "border-amber-100 bg-[linear-gradient(135deg,#fffdf7_0%,#fff4dd_100%)] text-zinc-800",
+                        )}
                       >
                         <Streamdown>{part.text}</Streamdown>
                       </div>
@@ -194,7 +196,7 @@ const PurePreviewMessage = ({
                           initial={{ y: 5, opacity: 0 }}
                           animate={{ y: 0, opacity: 1 }}
                           key={`message-${message.id}-part-${i}`}
-                          className="flex flex-col gap-2 p-2 mb-3 text-sm bg-zinc-50 dark:bg-zinc-900 rounded-md border"
+                          className="mb-3 flex flex-col gap-2 rounded-2xl border border-zinc-200 bg-white p-3 text-sm shadow-sm"
                         >
                           <div className="flex items-center gap-2">
                             {ActionIcon && (
