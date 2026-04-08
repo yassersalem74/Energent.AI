@@ -11,6 +11,9 @@
  */
 
 import { Sandbox } from "@vercel/sandbox";
+import { loadEnvConfig } from "@next/env";
+
+loadEnvConfig(process.cwd());
 
 const STARTUP_SCRIPT = `#!/bin/bash
 set -e

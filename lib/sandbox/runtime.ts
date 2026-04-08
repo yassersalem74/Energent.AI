@@ -16,19 +16,19 @@ const hasSandboxAuth = () =>
   );
 
 export const getSandboxUnavailableReason = () => {
-  if (
-    process.platform === "win32" &&
-    process.env.FORCE_ENABLE_VERCEL_SANDBOX !== "1"
-  ) {
-    return "Desktop mode is disabled on Windows development by default because Vercel Sandbox initialization is failing there.";
-  }
-
   if (!process.env.SANDBOX_SNAPSHOT_ID) {
     return "Desktop mode requires SANDBOX_SNAPSHOT_ID in .env.local.";
   }
 
   if (!hasSandboxAuth()) {
     return "Desktop mode requires Vercel Sandbox auth in .env.local.";
+  }
+
+  if (
+    process.platform === "win32" &&
+    process.env.FORCE_ENABLE_VERCEL_SANDBOX !== "1"
+  ) {
+    return "Desktop mode is opt-in on Windows. Add FORCE_ENABLE_VERCEL_SANDBOX=1 to .env.local after snapshot and auth are configured.";
   }
 
   return null;

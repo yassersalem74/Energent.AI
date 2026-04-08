@@ -1,5 +1,7 @@
 "use server";
 
+import os from "node:os";
+import path from "node:path";
 import { resolution } from "./tool";
 import {
   SandboxUnavailableError,
@@ -23,8 +25,109 @@ type SandboxInstance = {
   stop: () => Promise<unknown>;
 };
 
+type SandboxCredentials = {
+  token: string;
+  teamId: string;
+  projectId: string;
+};
+
+const decodeBase64Url = (value: string) => {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padding = normalized.length % 4;
+  const padded =
+    padding === 0 ? normalized : normalized.padEnd(normalized.length + (4 - padding), "=");
+
+  return Buffer.from(padded, "base64").toString("utf8");
+};
+
+const getSandboxCredentials = (): SandboxCredentials => {
+  if (
+    process.env.VERCEL_TOKEN &&
+    process.env.VERCEL_TEAM_ID &&
+    process.env.VERCEL_PROJECT_ID
+  ) {
+    return {
+      token: process.env.VERCEL_TOKEN,
+      teamId: process.env.VERCEL_TEAM_ID,
+      projectId: process.env.VERCEL_PROJECT_ID,
+    };
+  }
+
+  const oidcToken = process.env.VERCEL_OIDC_TOKEN;
+
+  if (!oidcToken) {
+    throw new SandboxUnavailableError(
+      "Desktop mode requires Vercel Sandbox auth in .env.local.",
+    );
+  }
+
+  try {
+    const [, payloadPart] = oidcToken.split(".");
+
+    if (!payloadPart) {
+      throw new Error("Missing JWT payload.");
+    }
+
+    const payload = JSON.parse(decodeBase64Url(payloadPart)) as {
+      owner_id?: string;
+      project_id?: string;
+      exp?: number;
+    };
+
+    if (!payload.owner_id || !payload.project_id) {
+      throw new Error("OIDC token is missing owner_id or project_id.");
+    }
+
+    if (typeof payload.exp === "number") {
+      const expiresAt = payload.exp * 1000;
+
+      if (Date.now() >= expiresAt) {
+        throw new SandboxUnavailableError(
+          `Vercel OIDC token expired at ${new Date(expiresAt).toISOString()}. Run \`npx vercel env pull\` and restart the dev server.`,
+        );
+      }
+    }
+
+    return {
+      token: oidcToken,
+      teamId: payload.owner_id,
+      projectId: payload.project_id,
+    };
+  } catch (error) {
+    throw new SandboxUnavailableError(
+      error instanceof Error
+        ? `Invalid Vercel OIDC token: ${error.message}`
+        : "Invalid Vercel OIDC token.",
+    );
+  }
+};
+
 const getSandboxSdk = async () => {
   assertSandboxAvailable();
+
+  if (!process.env.VERCEL_AUTH_CONFIG_DIR) {
+    process.env.VERCEL_AUTH_CONFIG_DIR = path.join(
+      os.homedir() || process.cwd(),
+      ".vercel",
+    );
+  }
+
+  if (!process.env.APPDATA) {
+    process.env.APPDATA = path.join(
+      os.homedir() || process.cwd(),
+      "AppData",
+      "Roaming",
+    );
+  }
+
+  if (!process.env.LOCALAPPDATA) {
+    process.env.LOCALAPPDATA = path.join(
+      os.homedir() || process.cwd(),
+      "AppData",
+      "Local",
+    );
+  }
+
   const { Sandbox } = await import("@vercel/sandbox");
   return Sandbox;
 };
@@ -32,9 +135,13 @@ const getSandboxSdk = async () => {
 export const getDesktop = async (id?: string) => {
   try {
     const Sandbox = await getSandboxSdk();
+    const credentials = getSandboxCredentials();
 
     if (id) {
-      const existing = (await Sandbox.get({ sandboxId: id })) as SandboxInstance;
+      const existing = (await Sandbox.get({
+        sandboxId: id,
+        ...credentials,
+      })) as SandboxInstance;
       if (existing.status === "running") {
         return existing;
       }
@@ -47,6 +154,7 @@ export const getDesktop = async (id?: string) => {
       },
       timeout: 300000,
       ports: [NOVNC_PORT],
+      ...credentials,
     })) as SandboxInstance;
 
     await sandbox.runCommand({
@@ -151,7 +259,10 @@ export const getDesktopURL = async (id?: string) => {
 export const killDesktop = async (id: string) => {
   try {
     const Sandbox = await getSandboxSdk();
-    const sandbox = await Sandbox.get({ sandboxId: id });
+    const sandbox = await Sandbox.get({
+      sandboxId: id,
+      ...getSandboxCredentials(),
+    });
     await sandbox.stop();
   } catch (error) {
     if (error instanceof SandboxUnavailableError) {
