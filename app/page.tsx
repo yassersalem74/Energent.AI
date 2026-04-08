@@ -1,5 +1,5 @@
 "use client";
-
+import DebugPanel from "@/components/debug-panel";
 import { PreviewMessage } from "@/components/message";
 import { getDesktopURL } from "@/lib/sandbox/utils";
 import { useScrollToBottom } from "@/lib/use-scroll-to-bottom";
@@ -26,6 +26,7 @@ export default function Chat() {
   const [isInitializing, setIsInitializing] = useState(true);
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [sandboxId, setSandboxId] = useState<string | null>(null);
+  const [desktopError, setDesktopError] = useState<string | null>(null);
 
   const {
     messages,
@@ -87,12 +88,18 @@ export default function Chat() {
   const refreshDesktop = async () => {
     try {
       setIsInitializing(true);
-      const { streamUrl, id } = await getDesktopURL(sandboxId || undefined);
-      // console.log("Refreshed desktop connection with ID:", id);
+      const { streamUrl, id, error } = await getDesktopURL(
+        sandboxId || undefined,
+      );
+      setDesktopError(error);
       setStreamUrl(streamUrl);
       setSandboxId(id);
     } catch (err) {
       console.error("Failed to refresh desktop:", err);
+      setStreamUrl(null);
+      setDesktopError(
+        err instanceof Error ? err.message : "Failed to refresh desktop",
+      );
     } finally {
       setIsInitializing(false);
     }
@@ -147,13 +154,19 @@ export default function Chat() {
         setIsInitializing(true);
 
         // Use the provided ID or create a new one
-        const { streamUrl, id } = await getDesktopURL(sandboxId ?? undefined);
+        const { streamUrl, id, error } = await getDesktopURL(
+          sandboxId ?? undefined,
+        );
 
+        setDesktopError(error);
         setStreamUrl(streamUrl);
         setSandboxId(id);
       } catch (err) {
         console.error("Failed to initialize desktop:", err);
-        toast.error("Failed to initialize desktop");
+        setStreamUrl(null);
+        setDesktopError(
+          err instanceof Error ? err.message : "Failed to initialize desktop",
+        );
       } finally {
         setIsInitializing(false);
       }
@@ -172,94 +185,93 @@ export default function Chat() {
 
       {/* Resizable Panels */}
       <div className="w-full hidden xl:block">
-        <ResizablePanelGroup direction="horizontal" className="h-full">
-          {/* Desktop Stream Panel */}
-          <ResizablePanel
-            defaultSize={70}
-            minSize={40}
-            className="bg-black relative items-center justify-center"
-          >
-            {streamUrl ? (
-              <>
-                <iframe
-                  src={streamUrl}
-                  className="w-full h-full"
-                  style={{
-                    transformOrigin: "center",
-                    width: "100%",
-                    height: "100%",
-                  }}
-                  allow="autoplay"
-                />
-                <Button
-                  onClick={refreshDesktop}
-                  className="absolute top-2 right-2 bg-black/50 hover:bg-black/70 text-white px-3 py-1 rounded text-sm z-10"
-                  disabled={isInitializing}
-                >
-                  {isInitializing ? "Creating desktop..." : "New desktop"}
-                </Button>
-              </>
-            ) : (
-              <div className="flex items-center justify-center h-full text-white">
-                {isInitializing
-                  ? "Initializing desktop..."
-                  : "Loading stream..."}
-              </div>
-            )}
-          </ResizablePanel>
+<ResizablePanelGroup direction="horizontal" className="h-full">
 
-          <ResizableHandle withHandle />
+  {/* ✅ LEFT: CHAT */}
+  <ResizablePanel
+    defaultSize={40}
+    minSize={30}
+    className="flex flex-col border-r border-zinc-200"
+  >
+    <div className="bg-white py-4 px-4 flex justify-between items-center">
+      <AISDKLogo />
+      <DeployButton />
+    </div>
 
-          {/* Chat Interface Panel */}
-          <ResizablePanel
-            defaultSize={30}
-            minSize={25}
-            className="flex flex-col border-l border-zinc-200"
-          >
-            <div className="bg-white py-4 px-4 flex justify-between items-center">
-              <AISDKLogo />
-              <DeployButton />
-            </div>
+    <div
+      className="flex-1 space-y-6 py-4 overflow-y-auto px-4"
+      ref={desktopContainerRef}
+    >
+      {messages.length === 0 ? <ProjectInfo /> : null}
+      {messages.map((message, i) => (
+        <PreviewMessage
+          message={message}
+          key={message.id}
+          isLoading={isLoading}
+          status={status}
+          isLatestMessage={i === messages.length - 1}
+        />
+      ))}
+      <div ref={desktopEndRef} className="pb-2" />
+    </div>
 
-            <div
-              className="flex-1 space-y-6 py-4 overflow-y-auto px-4"
-              ref={desktopContainerRef}
-            >
-              {messages.length === 0 ? <ProjectInfo /> : null}
-              {messages.map((message, i) => (
-                <PreviewMessage
-                  message={message}
-                  key={message.id}
-                  isLoading={isLoading}
-                  status={status}
-                  isLatestMessage={i === messages.length - 1}
-                />
-              ))}
-              <div ref={desktopEndRef} className="pb-2" />
-            </div>
+    <div className="bg-white">
+      <form onSubmit={handleSubmit} className="p-4">
+        <Input
+          handleInputChange={handleInputChange}
+          input={input}
+          isInitializing={isInitializing}
+          isLoading={isLoading}
+          status={status}
+          stop={stop}
+        />
+      </form>
+    </div>
+<div className="border-t border-zinc-200">
+  <DebugPanel />
+</div>
+  </ResizablePanel>
 
-            {messages.length === 0 && (
-              <PromptSuggestions
-                disabled={isInitializing}
-                submitPrompt={(prompt: string) =>
-                  append({ role: "user", content: prompt })
-                }
-              />
-            )}
-            <div className="bg-white">
-              <form onSubmit={handleSubmit} className="p-4">
-                <Input
-                  handleInputChange={handleInputChange}
-                  input={input}
-                  isInitializing={isInitializing}
-                  isLoading={isLoading}
-                  status={status}
-                  stop={stop}
-                />
-              </form>
-            </div>
-          </ResizablePanel>
-        </ResizablePanelGroup>
+  <ResizableHandle withHandle />
+
+
+
+  {/* ✅ RIGHT: VNC */}
+  <ResizablePanel
+    defaultSize={60}
+    minSize={40}
+    className="bg-black relative"
+  >
+    {streamUrl ? (
+      <>
+        <iframe
+          src={streamUrl}
+          className="w-full h-full"
+          allow="autoplay"
+        />
+        <Button
+          onClick={refreshDesktop}
+          className="absolute top-2 right-2 bg-black/50 text-white"
+          disabled={isInitializing}
+        >
+          {isInitializing ? "Creating desktop..." : "New desktop"}
+        </Button>
+      </>
+    ) : (
+      <div className="flex items-center justify-center h-full text-white">
+        <div className="max-w-md px-6 text-center space-y-2">
+          <p>
+            {isInitializing ? "Initializing desktop..." : "Desktop unavailable"}
+          </p>
+          {desktopError ? (
+            <p className="text-sm text-zinc-300">{desktopError}</p>
+          ) : null}
+        </div>
+      </div>
+    )}
+  </ResizablePanel>
+
+</ResizablePanelGroup>
       </div>
 
       {/* Mobile View (Chat Only) */}

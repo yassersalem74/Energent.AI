@@ -1,30 +1,54 @@
 "use server";
 
-import { Sandbox } from "@vercel/sandbox";
 import { resolution } from "./tool";
+import {
+  SandboxUnavailableError,
+  assertSandboxAvailable,
+} from "./runtime";
 
 const NOVNC_PORT = 6080;
 const DISPLAY_ENV = { DISPLAY: ":99" };
 
+type SandboxInstance = {
+  sandboxId: string;
+  status: string;
+  domain: (port: number) => string;
+  readFileToBuffer: (options: { path: string }) => Promise<Buffer | null>;
+  runCommand: (options: {
+    cmd: string;
+    args?: string[];
+    env?: Record<string, string>;
+    detached?: boolean;
+  }) => Promise<{ stdout: () => Promise<string> }>;
+  stop: () => Promise<unknown>;
+};
+
+const getSandboxSdk = async () => {
+  assertSandboxAvailable();
+  const { Sandbox } = await import("@vercel/sandbox");
+  return Sandbox;
+};
+
 export const getDesktop = async (id?: string) => {
   try {
+    const Sandbox = await getSandboxSdk();
+
     if (id) {
-      const sandbox = await Sandbox.get({ sandboxId: id });
-      if (sandbox.status === "running") {
-        return sandbox;
+      const existing = (await Sandbox.get({ sandboxId: id })) as SandboxInstance;
+      if (existing.status === "running") {
+        return existing;
       }
     }
 
-    const sandbox = await Sandbox.create({
+    const sandbox = (await Sandbox.create({
       source: {
         type: "snapshot",
         snapshotId: process.env.SANDBOX_SNAPSHOT_ID!,
       },
       timeout: 300000,
       ports: [NOVNC_PORT],
-    });
+    })) as SandboxInstance;
 
-    // Start the desktop environment
     await sandbox.runCommand({
       cmd: "bash",
       args: ["/usr/local/bin/start-desktop.sh"],
@@ -34,10 +58,8 @@ export const getDesktop = async (id?: string) => {
       detached: true,
     });
 
-    // Wait for noVNC to be ready
     await waitForNoVNC(sandbox);
 
-    // Set background color (ctypes.util is missing on AL2023, load libX11 directly)
     await sandbox.runCommand({
       cmd: "python3",
       args: [
@@ -55,7 +77,6 @@ lib.XCloseDisplay(d)`,
       env: DISPLAY_ENV,
     });
 
-    // Launch Chrome so the AI has a browser to work with immediately
     await sandbox.runCommand({
       cmd: "bash",
       args: [
@@ -68,12 +89,16 @@ lib.XCloseDisplay(d)`,
 
     return sandbox;
   } catch (error) {
+    if (error instanceof SandboxUnavailableError) {
+      throw error;
+    }
+
     console.error("Error in getDesktop:", error);
     throw error;
   }
 };
 
-async function waitForNoVNC(sandbox: Sandbox, maxRetries = 20) {
+async function waitForNoVNC(sandbox: SandboxInstance, maxRetries = 20) {
   for (let i = 0; i < maxRetries; i++) {
     try {
       const result = await sandbox.runCommand({
@@ -83,26 +108,41 @@ async function waitForNoVNC(sandbox: Sandbox, maxRetries = 20) {
           `curl -s -o /dev/null -w "%{http_code}" http://localhost:${NOVNC_PORT}`,
         ],
       });
+
       const statusCode = await result.stdout();
+
       if (statusCode.trim() === "200") {
         return;
       }
-    } catch {
-      // noVNC not ready yet
-    }
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    } catch {}
+
+    await new Promise((r) => setTimeout(r, 500));
   }
-  console.warn("noVNC health check timed out, proceeding anyway");
+
+  console.warn("noVNC health check timed out");
 }
 
 export const getDesktopURL = async (id?: string) => {
   try {
     const sandbox = await getDesktop(id);
+
     const baseUrl = sandbox.domain(NOVNC_PORT);
     const streamUrl = `${baseUrl}/vnc.html?autoconnect=true&resize=scale&reconnect=true`;
 
-    return { streamUrl, id: sandbox.sandboxId };
+    return {
+      streamUrl,
+      id: sandbox.sandboxId,
+      error: null,
+    };
   } catch (error) {
+    if (error instanceof SandboxUnavailableError) {
+      return {
+        streamUrl: null,
+        id: null,
+        error: error.message,
+      };
+    }
+
     console.error("Error in getDesktopURL:", error);
     throw error;
   }
@@ -110,9 +150,14 @@ export const getDesktopURL = async (id?: string) => {
 
 export const killDesktop = async (id: string) => {
   try {
+    const Sandbox = await getSandboxSdk();
     const sandbox = await Sandbox.get({ sandboxId: id });
     await sandbox.stop();
   } catch (error) {
+    if (error instanceof SandboxUnavailableError) {
+      return;
+    }
+
     console.error("Error killing desktop:", error);
   }
 };
