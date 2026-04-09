@@ -14,6 +14,13 @@
 </p>
 <br/>
 
+## Submission Links
+
+Thank you again for the opportunity and the extended time to complete the coding challenge. I have now finalized my implementation and would like to share the relevant links below.
+
+- Demo Video: [Google Drive Folder](https://drive.google.com/drive/folders/1gvMjC2ljM6VzTp2CDqELSGoqx9QIxeHp?usp=sharing)
+- GitHub Repository: [yassersalem74/Energent.AI](https://github.com/yassersalem74/Energent.AI.git)
+
 ## Features
 
 - Streaming text responses powered by the [AI SDK](https://sdk.vercel.ai/docs).
